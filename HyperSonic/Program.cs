@@ -16,6 +16,7 @@ class Player
         var map = new Mapa();
         //map.GetBombBlastEffect(new Point(12,0), 3);
         map.GetPositions(new Point(0, 0), 7).ToList().ForEach(p => Console.Error.WriteLine($"Point:{p.Point} Distance:{p.Distance}"));
+        map.GetBombBlastEffect(new Point(3, 2), 5);
         //map.GetPositions(new Point(0, 0), 100).Select(point => map.GetBombBlastEffect(point, 3)).OrderByDescending(be => be.BombDamage).ToList().ForEach(be => Console.WriteLine($"{be.Point} - {be.BombDamage}"));
         Console.ReadLine();
     }
@@ -162,7 +163,7 @@ class Map : IMap
             {
                 var tileChar = row[x];
                 var tilePosition = new Point(x, y);
-                var tile = new Tile(row[x].GetTile(), new List<Tile>(), tilePosition, entities.Where(entity=> entity.Point.Equals(tilePosition)).ToList());
+                var tile = new Tile(row[x].GetTile(), new List<Tile>(), tilePosition, entities.Where(entity => entity.Point.Equals(tilePosition)).ToList());
                 map[x, y] = tile;
                 if (tile.TileType == TileType.Box)
                 {
@@ -252,16 +253,11 @@ class Map : IMap
         return distance;
     }
 
-    private void testq()
-    {
-//var left = GetBombEffect(() => 8, i=> i<5, i=> i--);
-    }
-
     private bool GetBombEffect(Func<int> init, Func<int, bool> condition, Func<int, int> modifier, Func<int, TileType> getTileType)
     {
-        for (int x = init(); condition(x) ; x = modifier(x))
+        for (int i = init(); condition(i); i = modifier(i))
         {
-            var tileType = getTileType(x);
+            var tileType = getTileType(i);
             if (tileType == TileType.Box)
                 return true;
             if (tileType == TileType.Wall)
@@ -272,50 +268,26 @@ class Map : IMap
 
     private bool GetBombEffectLeft(Point o, int blastRadius)
     {
-        var leftBound = Math.Max(0, o.X - blastRadius);
-
-        for (int x = o.X; x >= leftBound; x--)
-        {
-            var tileType = map[x, o.Y].TileType;
-            if (tileType == TileType.Box)
-                return true;
-            if (tileType == TileType.Wall)
-                return false;
-        }
-        return false;
+        var left = Math.Max(0, o.X - blastRadius);
+        return GetBombEffect(() => o.X, x => x >= left, x => x - 1, x => map[x, o.Y].TileType);
     }
 
     private bool GetBombRight(Point o, int blastRadius)
     {
-        var rightBound = Math.Min( o.X + blastRadius, map.GetLength(0)-1);
-
-        for (int x = o.X; x <= rightBound; x++)
-        {
-            var tileType = map[x, o.Y].TileType;
-            if (tileType == TileType.Box)
-                return true;
-            if (tileType == TileType.Wall)
-                return false;
-        }
-        return false;
+        var right = Math.Min(o.X + blastRadius, map.GetLength(0) - 1);
+        return GetBombEffect(() => o.X, x => x <= right, x => x + 1, x => map[x, o.Y].TileType);
     }
+
     private bool GetBombTop(Point o, int blastRadius)
     {
-        var topBound = o.Y - blastRadius;
-        if (topBound < 0)
-        {
-            blastRadius = blastRadius + topBound;
-        }
-        return Enumerable.Range(Math.Max(0, topBound) + 1, blastRadius).Select(y => map[o.X, y].TileType).Any(tileType => tileType == TileType.Box);
+        var top = Math.Max(0, o.Y - blastRadius);
+        return GetBombEffect(() => o.Y, y => y >= top, y => y - 1, y=> map[o.X, y].TileType);
     }
+
     private bool GetBombDown(Point o, int blastRadius)
     {
-        var downBound = o.Y + blastRadius;
-        if (downBound > map.GetLength(1))
-        {
-            blastRadius = map.GetLength(1) - o.Y;
-        }
-        return Enumerable.Range(o.Y, blastRadius).Select(y => map[o.X, y].TileType).Any(tileType => tileType == TileType.Box);
+        var bottom = Math.Min(o.Y + blastRadius, map.GetLength(1) - 1);
+        return GetBombEffect(() => o.Y, y => y <= bottom, y => y + 1, y => map[o.X, y].TileType);
     }
 
     public IEnumerable<Entity> GetMyBombs()
