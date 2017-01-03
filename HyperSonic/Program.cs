@@ -15,7 +15,7 @@ class Player
     {
         var map = new Mapa();
         //map.GetBombBlastEffect(new Point(12,0), 3);
-        map.GetPositions(new Point(0, 0), 7).ToList().ForEach(p => Debug($"Point:{p.Point} Distance:{p.Distance}"));
+        map.GetPositions(new Point(0, 0), 7).ToList().ForEach(p => $"Point:{p.Point} Distance:{p.Distance}".Debug());
         map.GetBombBlastEffect(new Point(3, 2), 5);
         //map.GetPositions(new Point(0, 0), 100).Select(point => map.GetBombBlastEffect(point, 3)).OrderByDescending(be => be.BombDamage).ToList().ForEach(be => PerformeAction($"{be.Point} - {be.BombDamage}"));
         Console.ReadLine();
@@ -39,7 +39,7 @@ class Player
             for (int i = 0; i < height; i++)
             {
                 mapSource[i] = Console.ReadLine();
-                Debug(mapSource[i]);
+                mapSource[i].Debug();
             }
 
             var entities = new List<Entity>();
@@ -53,34 +53,23 @@ class Player
                 int y = int.Parse(inputs[3]);
                 int param1 = int.Parse(inputs[4]);
                 int param2 = int.Parse(inputs[5]);
-                entities.Add(new Entity(entityType, owner, x, y, param1, param2));
+                entities.Add(new Entity(entityType.GetEntityType(), owner, x, y, param1, param2));
             }
             IMap map = new Map(width, height, mapSource, entities, myId);
 
             if (playerAction == PlayerAction.Lost)
             {
                 optimalPoint = GetOptimalPoint(map);
-                Debug("Lost");
-                PerformAction($"MOVE {optimalPoint.X} {optimalPoint.Y}");
+                "Lost".Debug();
+                $"MOVE {optimalPoint.X} {optimalPoint.Y}".PerformAction();
                 playerAction = PlayerAction.Walking;
             }
             else if (playerAction == PlayerAction.Walking)
             {
                 playerAction = PlayerIsWalking(playerAction, ref optimalPoint, map, myId);
             }
-            Debug($"Optimal: {optimalPoint}");
+            $"Optimal: {optimalPoint}".Debug();
         }
-    }
-
-    private static void PerformAction(string action)
-    {
-        var now = DateTime.Now;
-        Console.WriteLine($"{action} {now.Minute}:{now.Second}.{now.Millisecond}");
-    }
-
-    private static void Debug(string message)
-    {
-        Console.Error.WriteLine(message);
     }
 
     private static PlayerAction PlayerIsWalking(PlayerAction action, ref Point optimalPoint, IMap map, int myId)
@@ -90,22 +79,22 @@ class Player
             var optimal = GetOptimalPoint(map);
             if (optimal.Equals(optimalPoint))
             {
-                Debug("At optimal");
-                PerformAction($"BOMB {optimalPoint.X} {optimalPoint.Y}");
+                "At optimal".Debug();
+                $"BOMB {optimalPoint.X} {optimalPoint.Y}".PerformAction();
                 return PlayerAction.Lost;
             }
             else
             {
-                Debug("Optimal no longer optimal, walking");
+                "Optimal no longer optimal, walking".Debug();
                 optimalPoint = optimal;
-                PerformAction($"MOVE {optimalPoint.X} {optimalPoint.Y}");
+                $"MOVE {optimalPoint.X} {optimalPoint.Y}".PerformAction();
                 return action;
             }
         }
         else
         {
-            Debug("Walking");
-            PerformAction($"MOVE {optimalPoint.X} {optimalPoint.Y}");
+            "Walking".Debug();
+            $"MOVE {optimalPoint.X} {optimalPoint.Y}".PerformAction();
             return action;
         }
     }
@@ -114,12 +103,17 @@ class Player
     {
         Point optimalPoint;
         var blastPoints = map.GetPositions(map.Me.Point, 10).Select(pad => new { BlastEffect = map.GetBombBlastEffect(pad.Point, map.Me.Param2), Distance = pad.Distance }).OrderByDescending(bead => bead.BlastEffect.BombDamage).ThenBy(bead => bead.Distance).ToList();
-        blastPoints.ToList().ForEach(bpd => Debug($"be:{bpd.BlastEffect.BombDamage}, po:{bpd.BlastEffect.Point}, d:{bpd.Distance}"));
+        blastPoints.ToList().ForEach(bpd => $"be:{bpd.BlastEffect.BombDamage}, po:{bpd.BlastEffect.Point}, d:{bpd.Distance}".Debug());
         if (blastPoints.First().BlastEffect.BombDamage == 0)
         {
             blastPoints = map.GetPositions(map.Me.Point, 100).Select(pad => new { BlastEffect = map.GetBombBlastEffect(pad.Point, map.Me.Param2), Distance = pad.Distance }).OrderByDescending(bead => bead.BlastEffect.BombDamage).ThenBy(bead => bead.Distance).ToList();
         }
-        optimalPoint = blastPoints.First(bp=> !map.GetMyBombs().Select(bomb=>bomb.Point).Contains(bp.BlastEffect.Point)).BlastEffect.Point;
+        var blastPoint = blastPoints.FirstOrDefault(bp => !map.GetMyBombs().Select(bomb => bomb.Point).Contains(bp.BlastEffect.Point));
+        if (blastPoint == null)
+        {
+            blastPoint = blastPoints.First();
+        }
+        optimalPoint = blastPoint.BlastEffect.Point;
         return optimalPoint;
     }
 }
@@ -137,9 +131,9 @@ class Entity
     public int Param1 { get; }
     public int Param2 { get; }
 
-    public Entity(int entityType, int owner, int x, int y, int param1, int param2)
+    public Entity(EntityType entityType, int owner, int x, int y, int param1, int param2)
     {
-        EntityType = entityType == 0 ? EntityType.Player : entityType == 1 ? EntityType.Bomb : EntityType.Item;
+        EntityType = entityType;
         Owner = owner;
         Point = new Point(x, y);
         Param1 = param1;
@@ -172,7 +166,7 @@ class Map : IMap
             {
                 var tileChar = row[x];
                 var tilePosition = new Point(x, y);
-                var tile = new Tile(row[x].GetTile(), new List<Tile>(), tilePosition, entities.Where(entity => entity.Point.Equals(tilePosition)).ToList());
+                var tile = new Tile(row[x].GetTile(), new List<Tile>(), tilePosition, entities.Where(entity => entity.Point.Equals(tilePosition)).ToList(), -1);
                 map[x, y] = tile;
                 if (tile.TileType == TileType.Box)
                 {
@@ -180,6 +174,27 @@ class Map : IMap
                 }
             }
         }
+
+        ModifyNeighbours(width, height);
+        me = entities.Where(entity => entity.EntityType == EntityType.Player && entity.Owner == myId).FirstOrDefault();
+
+        Entities = entities.Except(new[] { me });
+
+        ModifyTileExplosions(Entities);
+
+        for (int x = 0; x < width; x++)
+        {
+            for (int y = 0; y < height; y++)
+            {
+                var tile = map[x, y];
+                if (tile.Entities.Where(entity => entity.EntityType == EntityType.Bomb).Any() || tile.Explodes != -1)
+                    tile.ToString().Debug();
+            }
+        }
+    }
+
+    private void ModifyNeighbours(int width, int height)
+    {
         for (int x = 0; x < width; x++)
         {
             for (int y = 0; y < height; y++)
@@ -194,9 +209,40 @@ class Map : IMap
                     map[x, y].Neighbors.Add(map[x, y + 1]);
             }
         }
-        me = entities.Where(entity => entity.EntityType == EntityType.Player && entity.Owner == myId).FirstOrDefault();
-        Entities = entities.Except(new[] { me });
     }
+
+    private void ModifyTileExplosions(IEnumerable<Entity> entities)
+    {
+        entities.Where(entity => entity.EntityType == EntityType.Bomb).ToList().ForEach(bomb =>
+        {
+            new[] { Direction.Left, Direction.Right, Direction.Up, Direction.Down }.ToList().ForEach(direction => WalkOrtogonalOnMap(bomb.Point, direction, 100, tile =>
+            {
+                Entity b;
+                if ((b = tile.Entities.Where(entity => entity.EntityType == EntityType.Bomb).OrderBy(b1 => b1.Param1).FirstOrDefault()) != null)
+                {
+                    if (bomb.Param1 < b.Param1)
+                    {
+                        ModifyTileExplosions(new[] { new Entity(b.EntityType, b.Owner, b.Point.X, b.Point.Y, bomb.Param1, b.Param2) });
+                    }
+                }
+                else if (tile.TileType == TileType.Floor || tile.TileType == TileType.Box)
+                {
+                    if (tile.Explodes == -1 || bomb.Param1 < tile.Explodes)
+                    {
+                        map[tile.Position.X, tile.Position.Y] = new Tile(tile.TileType, tile.Neighbors, tile.Position, tile.Entities, bomb.Param1);
+                    }
+                }
+
+                if (tile.TileType == TileType.Wall || tile.TileType == TileType.Box || tile.Entities.Any())
+                {
+                    return WalkAction.Stop;
+                }
+                return WalkAction.Continue;
+            }));
+
+        });
+    }
+
     public BlastEffect GetBombBlastEffect(Point o, int blastRadius)
     {
         var bombs = 0;
@@ -212,7 +258,8 @@ class Map : IMap
     {
         var tile = map[point.X, point.Y];
         var list = new List<PointAndDistance>() { new PointAndDistance(point, 0) };
-        return GetPositionsRec(tile, list, 1, radius);
+        var positions =  GetPositionsRec(tile, list, 1, radius);
+        return positions.Except(positions.Where(position => map[position.Point.X, position.Point.Y].Explodes > -1)).ToList();
     }
 
     private List<PointAndDistance> GetPositionsRec(Tile tile, List<PointAndDistance> list, int depth, int radius)
@@ -225,7 +272,7 @@ class Map : IMap
         {
             tile.Neighbors.ForEach(t =>
             {
-                if (t.TileType == TileType.Empty && !list.Exists(pad => pad.Point.Equals(t.Position)) && !t.Entities.Any(item=>item.EntityType==EntityType.Bomb))
+                if (t.TileType == TileType.Floor && !list.Exists(pad => pad.Point.Equals(t.Position)) && !t.Entities.Any(item => item.EntityType == EntityType.Bomb))
                 {
                     list.Add(new PointAndDistance(t.Position, depth));
                     GetPositionsRec(t, list, depth + 1, radius);
@@ -235,21 +282,57 @@ class Map : IMap
         }
     }
 
-    private int GetDistance(Point p, Point p1)
+    private void WalkOrtogonalOnMap(Point start, Direction direction, int maxSteps, Func<Tile, WalkAction> onTile)
     {
-        var distance = Math.Abs(p.X - p1.X) + Math.Abs(p.Y - p1.Y);
-        return distance;
+        if (direction == Direction.Left && start.X > 0)
+        {
+            var left = Math.Max(0, start.X - maxSteps);
+            PerformeOrtogonalWalkOnMap(() => start.X - 1, x => x >= left, x => x - 1, x => map[x, start.Y], onTile);
+        }
+
+        if (direction == Direction.Right && start.X < map.GetLength(0) - 1)
+        {
+            var right = Math.Min(start.X + maxSteps, map.GetLength(0) - 1);
+            PerformeOrtogonalWalkOnMap(() => start.X + 1, x => x <= right, x => x + 1, x => map[x, start.Y], onTile);
+        }
+
+        if (direction == Direction.Up && start.Y > 0)
+        {
+            var top = Math.Max(0, start.Y - maxSteps);
+            PerformeOrtogonalWalkOnMap(() => start.Y - 1, y => y >= top, y => y - 1, y => map[start.X, y], onTile);
+        }
+
+        if (direction == Direction.Down && start.Y > map.GetLength(1) - 1)
+        {
+            var bottom = Math.Min(start.Y + maxSteps, map.GetLength(1) - 1);
+            PerformeOrtogonalWalkOnMap(() => start.Y + 1, y => y <= bottom, y => y + 1, y => map[start.X, y], onTile);
+        }
     }
 
-    private bool GetBombEffect(Func<int> init, Func<int, bool> condition, Func<int, int> modifier, Func<int, Tile> getTileType)
+    private void PerformeOrtogonalWalkOnMap(Func<int> init, Func<int, bool> condition, Func<int, int> modifier, Func<int, Tile> getTile, Func<Tile, WalkAction> onTile)
     {
         for (int i = init(); condition(i); i = modifier(i))
         {
-            var tileType = getTileType(i).TileType;
-            if (tileType == TileType.Box)
+            var tile = getTile(i);
+            if (onTile(tile) == WalkAction.Stop)
+                return;
+        }
+    }
+
+    private bool GetBombEffect(Func<int> init, Func<int, bool> condition, Func<int, int> modifier, Func<int, Tile> getTile)
+    {
+        for (int i = init(); condition(i); i = modifier(i))
+        {
+            Entity bomb;
+            var tile = getTile(i);
+            if (tile.TileType == TileType.Box)
                 return true;
-            if (tileType == TileType.Wall)
+            else if (tile.TileType == TileType.Wall)
                 return false;
+            else if ((bomb = tile.Entities.FirstOrDefault(entity => entity.EntityType == EntityType.Bomb)) != null)
+            {
+                return false;
+            }
         }
         return false;
     }
@@ -269,7 +352,7 @@ class Map : IMap
     private bool GetBombTop(Point o, int blastRadius)
     {
         var top = Math.Max(0, o.Y - blastRadius);
-        return GetBombEffect(() => o.Y, y => y >= top, y => y - 1, y=> map[o.X, y]);
+        return GetBombEffect(() => o.Y, y => y >= top, y => y - 1, y => map[o.X, y]);
     }
 
     private bool GetBombDown(Point o, int blastRadius)
@@ -284,6 +367,20 @@ class Map : IMap
     }
 
     public Entity Me => me;
+}
+
+enum WalkAction
+{
+    Continue,
+    Stop
+}
+
+enum Direction
+{
+    Up,
+    Down,
+    Left,
+    Right
 }
 
 struct BlastEffect
@@ -338,20 +435,28 @@ class Tile
     public List<Tile> Neighbors { get; private set; }
     public Point Position { get; private set; }
     public List<Entity> Entities { get; private set; }
+    public int Explodes { get; private set; }
 
-    public Tile(TileType tileType, List<Tile> neighbors, Point position, List<Entity> entities)
+    public Tile(TileType tileType, List<Tile> neighbors, Point position, List<Entity> entities, int explodes)
     {
         TileType = tileType;
         Neighbors = neighbors;
         Position = position;
         Entities = entities;
+        Explodes = explodes;
+    }
+
+    public override string ToString()
+    {
+        var entities = Entities.Any() ? $"entities {Entities.Select(entity => entity.EntityType.ToString()).ToList().Aggregate((c, n) => $"{c}, {n}")}" : "";
+        return $"point: {Position} type:{TileType} explodes:{Explodes}";
     }
 }
 
 enum TileType
 {
     Box,
-    Empty,
+    Floor,
     Unknown,
     Wall
 }
@@ -363,7 +468,7 @@ static class Extensions
         switch (tileChar)
         {
             case '.':
-                return TileType.Empty;
+                return TileType.Floor;
             case '0':
             case '1':
             case '2':
@@ -383,6 +488,24 @@ static class Extensions
     public static Point AddY(this Point point, int y)
     {
         return new Point(point.X, point.Y + y);
+    }
+
+    public static EntityType GetEntityType(this int entityType)
+    {
+        return entityType == 0 ? EntityType.Player : entityType == 1 ? EntityType.Bomb : EntityType.Item;
+    }
+
+
+    public static void PerformAction(this string action)
+    {
+        var now = DateTime.Now;
+        $"{now.Minute}:{now.Second}.{now.Millisecond}".Debug();
+        Console.WriteLine($"{action}");
+    }
+
+    public static void Debug(this string message)
+    {
+        Console.Error.WriteLine(message);
     }
 }
 
@@ -407,7 +530,7 @@ class Mapa : Map
         ".20.1.2.1.02.",
         ".X1X1X.X1X1X.",
         "..12.000.21.."
-    }, Enumerable.Empty<Entity>(), 0)
+    }, new[] { new Entity(EntityType.Bomb, 0, 5, 4, 3, 3), new Entity(EntityType.Bomb, 0, 7, 4, 4, 3) }, 0)
     {
     }
 }
