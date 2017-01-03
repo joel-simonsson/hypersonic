@@ -12,8 +12,8 @@ class Player
     {
         var map = new Mapa();
         //map.GetBombBlastEffect(new Point(12,0), 3);
-        map.GetPositions(new Point(0, 0), 7).ToList().ForEach(p => $"Point:{p.Point} Distance:{p.Distance}".Debug());
-        map.GetBombBlastEffect(new Point(3, 2), 5);
+        var m = new Map(map.Width, map.Height, map.MapSource, map.Entities.ToList().Concat(new[] { map.Me, new Entity(EntityType.Bomb, map.Me.Owner, 0, 0, 8, 3) }), 0);
+        var safe = m.AmISafe();
         //map.GetPositions(new Point(0, 0), 100).Select(point => map.GetBombBlastEffect(point, 3)).OrderByDescending(be => be.BombDamage).ToList().ForEach(be => PerformeAction($"{be.Point} - {be.BombDamage}"));
         Console.ReadLine();
     }
@@ -111,10 +111,15 @@ class Player
 
     private static Point GetOptimalPoint(IMap map)
     {
+        return GetOptimalPoint(map, Enumerable.Empty<Point>());
+    }
+
+    private static Point GetOptimalPoint(IMap map, IEnumerable<Point> exclude)
+    {
         Point optimalPoint;
-        var blastPoints = map.GetPositions(map.Me.Point, 10).Select(pad => new { BlastEffect = map.GetBombBlastEffect(pad.Point, map.Me.Param2), Distance = pad.Distance }).OrderByDescending(bead => bead.BlastEffect.BombDamage).ThenBy(bead => bead.Distance).ToList();
-        blastPoints.ToList().ForEach(bpd => $"be:{bpd.BlastEffect.BombDamage}, po:{bpd.BlastEffect.Point}, d:{bpd.Distance}".Debug());
-        if (blastPoints.First().BlastEffect.BombDamage == 0)
+        var blastPoints = map.GetPositions(map.Me.Point, 7).Where(pad => !exclude.Contains(pad.Point)).Select(pad => new { BlastEffect = map.GetBombBlastEffect(pad.Point, map.Me.Param2), Distance = pad.Distance }).OrderByDescending(bead => bead.BlastEffect.BombDamage).ThenBy(bead => bead.Distance).ToList();
+        blastPoints.ToList().ForEach(bpd => $"blastEffect:{bpd.BlastEffect.BombDamage}, position:{bpd.BlastEffect.Point}, distance:{bpd.Distance}".Debug());
+        if (!blastPoints.Any() || blastPoints.First().BlastEffect.BombDamage == 0)
         {
             blastPoints = map.GetPositions(map.Me.Point, 100).Select(pad => new { BlastEffect = map.GetBombBlastEffect(pad.Point, map.Me.Param2), Distance = pad.Distance }).OrderByDescending(bead => bead.BlastEffect.BombDamage).ThenBy(bead => bead.Distance).ToList();
         }
@@ -124,6 +129,13 @@ class Player
             blastPoint = blastPoints.First();
         }
         optimalPoint = blastPoint.BlastEffect.Point;
+
+        var m = new Map(map.Width, map.Height, map.MapSource, map.Entities.ToList().Concat(new[] {map.Me, new Entity(EntityType.Bomb, map.Me.Owner, optimalPoint.X, optimalPoint.Y, 8, 3) }), map.Me.Owner);
+        if (!m.AmISafe())
+        {
+            return GetOptimalPoint(map, exclude.Concat(new[] { optimalPoint }));
+        }
+
         return optimalPoint;
     }
 }
@@ -159,6 +171,11 @@ interface IMap
     IEnumerable<Entity> GetMyBombs();
     Entity Me { get; }
     Tile GetTile(Point point);
+    int Width { get; }
+    int Height { get; }
+    string[] MapSource { get; }
+    IEnumerable<Entity> Entities { get; }
+    bool AmISafe();
 }
 
 class Map : IMap
@@ -167,9 +184,11 @@ class Map : IMap
     List<Point> boxes = new List<Point>();
     public IEnumerable<Entity> Entities { get; private set; }
     private Entity me;
+    private string[] mapSource;
 
     public Map(int width, int height, string[] mapSource, IEnumerable<Entity> entities, int myId)
     {
+        this.mapSource = mapSource;
         map = new Tile[width, height];
         for (int y = 0; y < mapSource.Length; y++)
         {
@@ -276,7 +295,7 @@ class Map : IMap
         var tile = map[point.X, point.Y];
         var list = new List<PointAndDistance>() { new PointAndDistance(point, 0) };
         var positions = GetPositionsRec(tile, list, 1, radius);
-        return positions.Except(positions.Where(position => map[position.Point.X, position.Point.Y].Explodes > -1)).ToList();
+        return positions.Except(positions.Where(position => map[position.Point.X, position.Point.Y].Explodes != -1)).ToList();
     }
 
     private List<PointAndDistance> GetPositionsRec(Tile tile, List<PointAndDistance> list, int depth, int radius)
@@ -319,7 +338,7 @@ class Map : IMap
             PerformeOrtogonalWalkOnMap(() => start.Y - 1, y => y >= top, y => y - 1, y => map[start.X, y], onTile);
         }
 
-        if (direction == Direction.Down && start.Y > map.GetLength(1) - 1)
+        if (direction == Direction.Down && start.Y < map.GetLength(1) - 1)
         {
             var bottom = Math.Min(start.Y + maxSteps, map.GetLength(1) - 1);
             PerformeOrtogonalWalkOnMap(() => start.Y + 1, y => y <= bottom, y => y + 1, y => map[start.X, y], onTile);
@@ -383,7 +402,23 @@ class Map : IMap
         return Entities.Where(entity => entity.EntityType == EntityType.Bomb && entity.Owner == Me.Owner);
     }
 
+    public bool AmISafe()
+    {
+        var list = GetPositions(Me.Point, 8);
+        if (!list.Any())
+        {
+            return false;
+        }
+        return list.Select(pad => map[pad.Point.X, pad.Point.Y]).Where(tile => tile.Explodes == -1 && !tile.Entities.Where(entity => entity.EntityType == EntityType.Bomb).Any()).Any();
+    }
+
     public Entity Me => me;
+
+    public int Width => map.GetLength(0);
+
+    public int Height => map.GetLength(1);
+
+    public string[] MapSource => mapSource;
 }
 
 enum WalkAction
@@ -466,7 +501,7 @@ class Tile
     public override string ToString()
     {
         var entities = Entities.Any() ? $"entities {Entities.Select(entity => entity.EntityType.ToString()).ToList().Aggregate((c, n) => $"{c}, {n}")}" : "";
-        return $"point: {Position} type:{TileType} explodes:{Explodes}";
+        return $"point: {Position} type:{TileType} explodes:{Explodes} {entities}";
     }
 }
 
@@ -536,18 +571,18 @@ enum EntityType
 class Mapa : Map
 {
     public Mapa() : base(13, 11, new string[] {
-        "..12.000.21..",
-        ".X1X1X.X1X1X.",
-        ".20.1.2.1.02.",
-        "0X1X0X.X0X1X0",
-        ".2.02...20.2.",
+        "..2..0.0..2..",
+        ".X.X1X.X1X.X.",
+        "1.0202.2020.1",
         "2X.X.X.X.X.X2",
-        ".2.02...20.2.",
-        "0X1X0X.X0X1X0",
-        ".20.1.2.1.02.",
-        ".X1X1X.X1X1X.",
-        "..12.000.21.."
-    }, new[] { new Entity(EntityType.Bomb, 0, 5, 4, 3, 3), new Entity(EntityType.Bomb, 0, 7, 4, 4, 3) }, 0)
+        "11.0.....0.11",
+        ".X.X1X.X1X.X.",
+        "11.0.....0.11",
+        "2X.X.X.X.X.X2",
+        "1.0202.2020.1",
+        ".X.X1X.X1X.X.",
+        "..2..0.0..2.."
+    }, new[] { new Entity(EntityType.Player, 0, 0, 0, 1, 3) }, 0)
     {
     }
 }
