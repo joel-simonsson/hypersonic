@@ -190,7 +190,7 @@ class Map : IMap
     public BlastEffect GetBombBlastEffect(Point o, int blastRadius)
     {
         var bombs = 0;
-        bombs += GetBombLeft(o, blastRadius) ? 1 : 0;
+        bombs += GetBombEffectLeft(o, blastRadius) ? 1 : 0;
         bombs += GetBombRight(o, blastRadius) ? 1 : 0;
         bombs += GetBombTop(o, blastRadius) ? 1 : 0;
         bombs += GetBombDown(o, blastRadius) ? 1 : 0;
@@ -252,24 +252,52 @@ class Map : IMap
         return distance;
     }
 
-    private bool GetBombLeft(Point o, int blastRadius)
+    private void testq()
     {
-        var leftBound = o.X - blastRadius;
-        if (leftBound < 0)
-        {
-            blastRadius = blastRadius + leftBound;
-        }
-
-        return Enumerable.Range(Math.Max(0, leftBound) + 1, blastRadius).Select(x => map[x, o.Y].TileType).Any(tileType => tileType == TileType.Box);
+//var left = GetBombEffect(() => 8, i=> i<5, i=> i--);
     }
+
+    private bool GetBombEffect(Func<int> init, Func<int, bool> condition, Func<int, int> modifier, Func<int, TileType> getTileType)
+    {
+        for (int x = init(); condition(x) ; x = modifier(x))
+        {
+            var tileType = getTileType(x);
+            if (tileType == TileType.Box)
+                return true;
+            if (tileType == TileType.Wall)
+                return false;
+        }
+        return false;
+    }
+
+    private bool GetBombEffectLeft(Point o, int blastRadius)
+    {
+        var leftBound = Math.Max(0, o.X - blastRadius);
+
+        for (int x = o.X; x >= leftBound; x--)
+        {
+            var tileType = map[x, o.Y].TileType;
+            if (tileType == TileType.Box)
+                return true;
+            if (tileType == TileType.Wall)
+                return false;
+        }
+        return false;
+    }
+
     private bool GetBombRight(Point o, int blastRadius)
     {
-        var rightBound = o.X + blastRadius;
-        if (rightBound > map.GetLength(0))
+        var rightBound = Math.Min( o.X + blastRadius, map.GetLength(0)-1);
+
+        for (int x = o.X; x <= rightBound; x++)
         {
-            blastRadius = map.GetLength(0) - o.X;
+            var tileType = map[x, o.Y].TileType;
+            if (tileType == TileType.Box)
+                return true;
+            if (tileType == TileType.Wall)
+                return false;
         }
-        return Enumerable.Range(o.X, blastRadius).Select(x => map[x, o.Y].TileType).Any(tileType => tileType == TileType.Box);
+        return false;
     }
     private bool GetBombTop(Point o, int blastRadius)
     {
