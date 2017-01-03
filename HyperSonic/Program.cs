@@ -1,8 +1,5 @@
 ﻿using System;
 using System.Linq;
-using System.IO;
-using System.Text;
-using System.Collections;
 using System.Collections.Generic;
 
 /**
@@ -20,6 +17,10 @@ class Player
         //map.GetPositions(new Point(0, 0), 100).Select(point => map.GetBombBlastEffect(point, 3)).OrderByDescending(be => be.BombDamage).ToList().ForEach(be => PerformeAction($"{be.Point} - {be.BombDamage}"));
         Console.ReadLine();
     }
+
+
+    //static Point optimalPointStore = new Point(-1, -1);
+    //static Point ExplodingPoint = new Point(-1, -1);
 
     static void Main1(string[] args)
     {
@@ -68,11 +69,12 @@ class Player
             {
                 playerAction = PlayerIsWalking(playerAction, ref optimalPoint, map, myId);
             }
+
             $"Optimal: {optimalPoint}".Debug();
         }
     }
 
-    private static PlayerAction PlayerIsWalking(PlayerAction action, ref Point optimalPoint, IMap map, int myId)
+    private static PlayerAction PlayerIsWalking(PlayerAction playerAction, ref Point optimalPoint, IMap map, int myId)
     {
         if (map.Me.Point.Equals(optimalPoint) && map.Me.Param1 > 0)
         {
@@ -88,14 +90,22 @@ class Player
                 "Optimal no longer optimal, walking".Debug();
                 optimalPoint = optimal;
                 $"MOVE {optimalPoint.X} {optimalPoint.Y}".PerformAction();
-                return action;
+                return playerAction;
             }
         }
         else
         {
             "Walking".Debug();
+            var optimalTile = map.GetTile(optimalPoint);
+            if (optimalTile.Entities.Where(entity => entity.EntityType == EntityType.Bomb).Any() || optimalTile.Explodes != -1)
+            {
+                $"optimalPoint:{optimalPoint} no longer optimal!".Debug();
+                optimalPoint = GetOptimalPoint(map);
+                $"New optimalPoint:{optimalPoint}".Debug();
+            }
+
             $"MOVE {optimalPoint.X} {optimalPoint.Y}".PerformAction();
-            return action;
+            return playerAction;
         }
     }
 
@@ -120,7 +130,8 @@ class Player
 enum PlayerAction
 {
     Walking,
-    Lost
+    Lost,
+    Hiding
 }
 
 class Entity
@@ -147,6 +158,7 @@ interface IMap
     List<PointAndDistance> GetPositions(Point point, int radius);
     IEnumerable<Entity> GetMyBombs();
     Entity Me { get; }
+    Tile GetTile(Point point);
 }
 
 class Map : IMap
@@ -191,6 +203,11 @@ class Map : IMap
                     tile.ToString().Debug();
             }
         }
+    }
+
+    public Tile GetTile(Point point)
+    {
+        return map[point.X, point.Y];
     }
 
     private void ModifyNeighbours(int width, int height)
@@ -258,7 +275,7 @@ class Map : IMap
     {
         var tile = map[point.X, point.Y];
         var list = new List<PointAndDistance>() { new PointAndDistance(point, 0) };
-        var positions =  GetPositionsRec(tile, list, 1, radius);
+        var positions = GetPositionsRec(tile, list, 1, radius);
         return positions.Except(positions.Where(position => map[position.Point.X, position.Point.Y].Explodes > -1)).ToList();
     }
 
