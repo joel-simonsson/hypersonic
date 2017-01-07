@@ -134,7 +134,7 @@ class Player
             return me.Point;
         }
 
-        var blastPoint = blastPoints.FirstOrDefault(bp => !map.Entities.Where(entity=>entity.EntityType == EntityType.Bomb && entity.Owner == me.Owner).Select(bomb => bomb.Point).Contains(bp.BlastEffect.Point));
+        var blastPoint = blastPoints.FirstOrDefault(bp => !map.Entities.Where(entity => entity.EntityType == EntityType.Bomb && entity.Owner == me.Owner).Select(bomb => bomb.Point).Contains(bp.BlastEffect.Point));
 
         if (blastPoint == null)
         {
@@ -175,7 +175,7 @@ class Entity
     public int Param2 { get; }
     public bool Imaginary { get; }
 
-    public Entity(EntityType entityType, int owner, int x, int y, int param1, int param2):this(entityType, owner, x, y, param1, param2, false)
+    public Entity(EntityType entityType, int owner, int x, int y, int param1, int param2) : this(entityType, owner, x, y, param1, param2, false)
     {
     }
 
@@ -187,6 +187,11 @@ class Entity
         Param1 = param1;
         Param2 = param2;
         Imaginary = imaginary;
+    }
+
+    public Entity Clone()
+    {
+        return new Entity(EntityType, Owner, Point.X, Point.Y, Param1, Param2, Imaginary);
     }
 }
 
@@ -205,10 +210,12 @@ class Map : IMap
     private Tile[,] map;
     List<Point> boxes = new List<Point>();
     public IEnumerable<Entity> Entities { get; private set; }
-    private Entity me;
+    private string[] MapSource { get; set; }
 
     public Map(string[] mapSource, IEnumerable<Entity> entities)
     {
+        MapSource = mapSource;
+
         int width = mapSource.First().Length;
         int height = mapSource.Length;
         map = new Tile[width, height];
@@ -428,7 +435,9 @@ class Map : IMap
 
     public IMap Clone(Func<IEnumerable<Entity>, IEnumerable<Entity>> modifyEntities)
     {
-        throw new NotImplementedException();
+        var entities = modifyEntities(Entities.Select(entity => entity.Clone()));
+        var map = new Map(MapSource, entities);
+        return map;
     }
 }
 
