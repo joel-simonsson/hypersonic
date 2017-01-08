@@ -33,8 +33,9 @@ class Player
         int height = int.Parse(inputs[1]);
         int myId = int.Parse(inputs[2]);
 
-        var playerAction = PlayerAction.Lost;
         Point optimalPoint = new Point(-1, -1);
+        var action = PlayerAction.Lost;
+        var path = new Stack<Point>();
 
         // game loop
         while (true)
@@ -61,18 +62,18 @@ class Player
                 $"new Entity(EntityType.{entityType.GetEntityType()}, {owner}, {x}, {y}, {param1}, {param2})".Debug();
             }
             IMap map = new Map(mapSource, entities);
-            Entity me = entities.Where(entity => entity.EntityType == EntityType.Player && entity.Owner == myId).FirstOrDefault();
+            Me me = new Me(entities.Where(entity => entity.EntityType == EntityType.Player && entity.Owner == myId).FirstOrDefault(), PlayerAction.Lost);
 
-            if (playerAction == PlayerAction.Lost)
+            if (action == PlayerAction.Lost)
             {
                 optimalPoint = GetOptimalBlastPoint(map, me, RANGE);
                 "Lost".Debug();
                 $"MOVE {optimalPoint.X} {optimalPoint.Y}".PerformAction();
-                playerAction = PlayerAction.Walking;
+                action = PlayerAction.Walking;
             }
-            else if (playerAction == PlayerAction.Walking)
+            else if (action == PlayerAction.Walking)
             {
-                playerAction = PlayerIsWalking(playerAction, ref optimalPoint, map, me);
+                action = PlayerIsWalking(action, ref optimalPoint, map, me);
             }
 
             $"Optimal: {optimalPoint}".Debug();
@@ -192,6 +193,15 @@ class Entity
     public Entity Clone()
     {
         return new Entity(EntityType, Owner, Point.X, Point.Y, Param1, Param2, Imaginary);
+    }
+}
+
+class Me : Entity
+{
+    public PlayerAction Action { get; private set; }
+    public Me(Entity entity, PlayerAction action):base(entity.EntityType, entity.Owner, entity.Point.X, entity.Point.Y, entity.Param1, entity.Param2, entity.Imaginary)
+    {
+        Action = action;
     }
 }
 
